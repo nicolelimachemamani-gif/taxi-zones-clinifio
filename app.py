@@ -125,7 +125,6 @@ if _drift_total >= 10:
             f"⚠ Drift detected: {_drift_rate * 100:.0f}% negative feedback. "
             "Model retraining required."
         )
-        st.code("python -m src.monitor --months jun14")
     elif _drift_rate > 0.25:
         st.warning("Feedback degrading. Monitoring.")
 
