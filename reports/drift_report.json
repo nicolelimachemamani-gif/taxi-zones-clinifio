@@ -1,0 +1,12 @@
+{
+  "silhouette_production": 0.3869124224294016,
+  "silhouette_new_batch": 0.5565144987007892,
+  "relative_drop": -0.4383474565289622,
+  "far_point_rate": 0.98235,
+  "thresholds": {
+    "sil_drop_pct": 0.15,
+    "far_point_max": 0.1
+  },
+  "drift_detected": true,
+  "reason": "unseen demand areas"
+}

@@ -1,0 +1,22 @@
+# Runtime data
+data/raw/*.csv
+data/predictions_log.csv
+data/feedback.csv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+
+# Model binaries (large — regenerate with src.train + src.promote)
+models/*.joblib
+
+# IDE / OS
+.dist/
+.DS_Store
+Thumbs.db

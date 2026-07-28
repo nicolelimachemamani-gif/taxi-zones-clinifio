@@ -1,0 +1,86 @@
+name: Scheduled retraining
+
+# Two triggers on purpose:
+#   - schedule: this is the unattended maintenance process.
+#   - workflow_dispatch: this is what we press during the live demo.
+on:
+  schedule:
+    - cron: "0 6 * * 1"          # every Monday, 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Production batch to ingest (e.g. jun14)"
+        required: true
+        default: "jun14"
+      force:
+        description: "Retrain even if no drift is detected"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  monitor-and-retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch the incoming batch
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          MONTH="${{ github.event.inputs.month || 'jun14' }}"
+          pip install kaggle
+          kaggle datasets download -d fivethirtyeight/uber-pickups-in-new-york-city -p data/raw --unzip
+          ls -lh data/raw/uber-raw-data-$MONTH.csv
+
+      # Exit code 1 from the monitor means drift. continue-on-error lets the
+      # workflow read that outcome instead of dying on it.
+      - name: Detect drift
+        id: drift
+        continue-on-error: true
+        run: python -m src.monitor --months "${{ github.event.inputs.month || 'jun14' }}"
+
+      - name: Upload drift report
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: reports/drift_report.json
+
+      - name: No drift, nothing to do
+        if: steps.drift.outcome == 'success' && github.event.inputs.force != 'true'
+        run: echo "Model still valid. Skipping retraining."
+
+      - name: Retrain candidate
+        if: steps.drift.outcome == 'failure' || github.event.inputs.force == 'true'
+        run: |
+          python -m src.train --months apr14 may14 "${{ github.event.inputs.month || 'jun14' }}"
+
+      - name: Evaluate and promote
+        id: promote
+        if: steps.drift.outcome == 'failure' || github.event.inputs.force == 'true'
+        run: python -m src.promote | tee promote.log
+
+      - name: Commit the new production model
+        if: steps.promote.outcome == 'success'
+        run: |
+          if grep -q "PROMOTED" promote.log; then
+            git config user.name  "retrain-bot"
+            git config user.email "retrain-bot@users.noreply.github.com"
+            git add -f models/production.joblib models/production_metrics.json \
+                       data/processed/ reports/drift_report.json
+            git commit -m "chore(model): promote retrained model [skip ci]"
+            git push
+          else
+            echo "Candidate rejected. Production model unchanged."
+          fi
