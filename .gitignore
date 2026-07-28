@@ -13,8 +13,9 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# Model binaries (large — regenerate with src.train + src.promote)
+# Model binaries
 models/*.joblib
+!models/production.joblib
 
 # IDE / OS
 .dist/
